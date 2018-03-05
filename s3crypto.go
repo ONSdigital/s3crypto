@@ -280,13 +280,13 @@ func (c *CryptoClient) GetObjectRequestWithPSK(input *s3.GetObjectInput, psk []b
 // GetObject is a wrapper for GetObjectRequest
 func (c *CryptoClient) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
 	req, out := c.GetObjectRequest(input)
-	return out, req.Send()
+	return out, req.Error
 }
 
 // GetObjectWithPSK is a wrapper for GetObjectRequestWithPSK
 func (c *CryptoClient) GetObjectWithPSK(input *s3.GetObjectInput, psk []byte) (*s3.GetObjectOutput, error) {
 	req, out := c.GetObjectRequestWithPSK(input, psk)
-	return out, req.Send()
+	return out, req.Error
 }
 
 // GetObjectWithContext is a wrapper for GetObjectRequest with
@@ -295,7 +295,7 @@ func (c *CryptoClient) GetObjectWithContext(ctx aws.Context, input *s3.GetObject
 	req, out := c.GetObjectRequest(input)
 	req.SetContext(ctx)
 	req.ApplyOptions(opts...)
-	return out, req.Send()
+	return out, req.Error
 }
 
 // GetObjectWithContextWithPSK is a wrapper for GetObjectRequestWithPSK with
@@ -304,7 +304,7 @@ func (c *CryptoClient) GetObjectWithContextWithPSK(ctx aws.Context, input *s3.Ge
 	req, out := c.GetObjectRequestWithPSK(input, psk)
 	req.SetContext(ctx)
 	req.ApplyOptions(opts...)
-	return out, req.Send()
+	return out, req.Error
 }
 
 // CompleteMultipartUploadRequest wraps the SDK method by removing the temporarily stored encrypted
