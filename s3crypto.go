@@ -25,6 +25,9 @@ const encryptionKeyHeader = "Pskencrypted"
 // ErrNoPrivateKey is returned when an attempt is made to access a method that requires a private key when it has not been provided
 var ErrNoPrivateKey = errors.New("you have not provided a private key and therefore do not have permission to complete this action")
 
+// ErrNoMetadataPSK is returned when the file you are trying to download is not encrypted
+var ErrNoMetadataPSK = errors.New("no encrypted key found for this file, you are trying to download a file which is not encrypted")
+
 // Config represents the configuration items for the
 // CryptoClient
 type Config struct {
@@ -244,6 +247,12 @@ func (c *CryptoClient) GetObjectRequest(input *s3.GetObjectInput) (req *request.
 	}
 
 	ekStr := out.Metadata[encryptionKeyHeader]
+
+	if ekStr == nil {
+		req.Error = ErrNoMetadataPSK
+		return
+	}
+
 	psk, err := c.decryptKey(*ekStr)
 	if err != nil {
 		req.Error = err
