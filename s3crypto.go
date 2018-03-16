@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 const encryptionKeyHeader = "Pskencrypted"
@@ -47,6 +48,14 @@ type CryptoClient struct {
 	hasUserDefinedPSK bool
 }
 
+// Uploader provides a wrapper to the aws-sdk-go s3manager uploader
+// for encryption
+type Uploader struct {
+	*CryptoClient
+
+	s3uploader *s3manager.Uploader
+}
+
 // New supports the creation of an Encryption supported client
 // with a given aws session and rsa Private Key.
 func New(sess *session.Session, cfg *Config) *CryptoClient {
@@ -57,6 +66,21 @@ func New(sess *session.Session, cfg *Config) *CryptoClient {
 	}
 
 	return cc
+}
+
+// NewUploader creates a new instance of the s3crypto Uploader
+func NewUploader(sess *session.Session, cfg *Config) *Uploader {
+	cc := &CryptoClient{s3.New(sess), cfg.PrivateKey, cfg.PublicKey, cfg.HasUserDefinedPSK}
+
+	if cc.privKey != nil {
+		cc.publicKey = &cc.privKey.PublicKey
+	}
+
+	return &Uploader{
+		CryptoClient: cc,
+
+		s3uploader: s3manager.NewUploader(sess),
+	}
 }
 
 // CreateMultipartUploadRequest wraps the SDK method by creating a PSK which
@@ -420,7 +444,41 @@ func (c *CryptoClient) decryptKey(encryptedKeyHex string) ([]byte, error) {
 	return rsa.DecryptOAEP(hash, rand.Reader, c.privKey, encryptedKey, []byte(""))
 }
 
-func encryptObjectContent(psk []byte, b io.ReadSeeker) ([]byte, error) {
+// Upload provides a wrapper for the sdk method with encryption
+func (u *Uploader) Upload(input *s3manager.UploadInput) (output *s3manager.UploadOutput, err error) {
+	psk := createPSK()
+
+	ekStr, err := u.CryptoClient.encryptKey(psk)
+	if err != nil {
+		return
+	}
+
+	input.Metadata = make(map[string]*string)
+	input.Metadata[encryptionKeyHeader] = &ekStr
+
+	encryptedContent, err := encryptObjectContent(psk, input.Body)
+	if err != nil {
+		return
+	}
+
+	input.Body = bytes.NewReader(encryptedContent)
+
+	return u.s3uploader.Upload(input)
+}
+
+// UploadWithPSK allows you to encrypt the file with a given psk
+func (u *Uploader) UploadWithPSK(input *s3manager.UploadInput, psk []byte) (output *s3manager.UploadOutput, err error) {
+	encryptedContent, err := encryptObjectContent(psk, input.Body)
+	if err != nil {
+		return
+	}
+
+	input.Body = bytes.NewReader(encryptedContent)
+
+	return u.s3uploader.Upload(input)
+}
+
+func encryptObjectContent(psk []byte, b io.Reader) ([]byte, error) {
 	block, err := aes.NewCipher(psk)
 	if err != nil {
 		return nil, err
