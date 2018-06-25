@@ -479,42 +479,50 @@ func (u *Uploader) UploadWithPSK(input *s3manager.UploadInput, psk []byte) (outp
 }
 
 func encryptObjectContent(psk []byte, b io.Reader) ([]byte, error) {
+	bs, err := ioutil.ReadAll(b)
+	if err != nil {
+		return nil, err
+	}
+
 	block, err := aes.NewCipher(psk)
 	if err != nil {
 		return nil, err
 	}
 
-	var iv [aes.BlockSize]byte
-	stream := cipher.NewOFB(block, iv[:])
+	encryptedBytes := make([]byte, aes.BlockSize+len(bs))
 
-	buf := new(bytes.Buffer)
-	writer := &cipher.StreamWriter{S: stream, W: buf}
+	iv := encryptedBytes[:aes.BlockSize]
 
-	if _, err := io.Copy(writer, b); err != nil {
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, err
 	}
 
-	return buf.Bytes(), nil
+	stream := cipher.NewCFBEncrypter(block, iv)
+
+	stream.XORKeyStream(encryptedBytes[aes.BlockSize:], bs)
+
+	return encryptedBytes, nil
 }
 
 func decryptObjectContent(psk []byte, b io.ReadCloser) ([]byte, error) {
+	encryptedBytes, err := ioutil.ReadAll(b)
+	if err != nil {
+		return nil, err
+	}
+
 	block, err := aes.NewCipher(psk)
 	if err != nil {
 		return nil, err
 	}
 
-	var iv [aes.BlockSize]byte
-	stream := cipher.NewOFB(block, iv[:])
+	iv := encryptedBytes[:aes.BlockSize]
+	psk = encryptedBytes[aes.BlockSize:]
+	stream := cipher.NewCFBDecrypter(block, iv)
 
-	buf := new(bytes.Buffer)
+	decryptedBytes := make([]byte, len(encryptedBytes))
+	stream.XORKeyStream(decryptedBytes, encryptedBytes)
 
-	reader := &cipher.StreamReader{S: stream, R: b}
-
-	if _, err := io.Copy(buf, reader); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+	return decryptedBytes, nil
 }
 
 func createPSK() []byte {
