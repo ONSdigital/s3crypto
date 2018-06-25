@@ -516,7 +516,10 @@ func decryptObjectContent(psk []byte, b io.ReadCloser) ([]byte, error) {
 	}
 
 	iv := encryptedBytes[:aes.BlockSize]
-	psk = encryptedBytes[aes.BlockSize:]
+
+	// remove the iv from start of encrypted bytes
+	encryptedBytes = encryptedBytes[aes.BlockSize:]
+
 	stream := cipher.NewCFBDecrypter(block, iv)
 
 	unencryptedBytes := make([]byte, len(encryptedBytes))
