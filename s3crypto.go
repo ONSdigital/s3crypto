@@ -489,17 +489,11 @@ func encryptObjectContent(psk []byte, b io.Reader) ([]byte, error) {
 		return nil, err
 	}
 
-	encryptedBytes := make([]byte, aes.BlockSize+len(unencryptedBytes))
+	encryptedBytes := make([]byte, len(unencryptedBytes))
 
-	iv := encryptedBytes[:aes.BlockSize]
+	stream := cipher.NewCFBEncrypter(block, psk)
 
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return nil, err
-	}
-
-	stream := cipher.NewCFBEncrypter(block, iv)
-
-	stream.XORKeyStream(encryptedBytes[aes.BlockSize:], unencryptedBytes)
+	stream.XORKeyStream(encryptedBytes, unencryptedBytes)
 
 	return encryptedBytes, nil
 }
@@ -515,12 +509,7 @@ func decryptObjectContent(psk []byte, b io.ReadCloser) ([]byte, error) {
 		return nil, err
 	}
 
-	iv := encryptedBytes[:aes.BlockSize]
-
-	// remove the iv from start of encrypted bytes
-	encryptedBytes = encryptedBytes[aes.BlockSize:]
-
-	stream := cipher.NewCFBDecrypter(block, iv)
+	stream := cipher.NewCFBDecrypter(block, psk)
 
 	unencryptedBytes := make([]byte, len(encryptedBytes))
 	stream.XORKeyStream(unencryptedBytes, encryptedBytes)
