@@ -311,7 +311,12 @@ func (c *CryptoClient) GetObjectRequestWithPSK(input *s3.GetObjectInput, psk []b
 		return
 	}
 
-	content, err := decryptObjectContentChunks(c.chunkSize, psk, out.Body)
+	var content []byte
+	if c.chunkSize > 0 {
+		content, err = decryptObjectContentChunks(c.chunkSize, psk, out.Body)
+	} else {
+		content, err = decryptObjectContent(psk, out.Body)
+	}
 	if err != nil {
 		req.Error = err
 		return
