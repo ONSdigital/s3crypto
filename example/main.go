@@ -38,7 +38,8 @@ func main() {
 		panic(err)
 	}
 
-	svc := s3crypto.New(sess, &s3crypto.Config{PrivateKey: privateKey})
+	size := 5 * 1024 * 1024
+	svc := s3crypto.New(sess, &s3crypto.Config{PrivateKey: privateKey, MultipartChunkSize: size})
 
 	bucket := "dp-frontend-florence-file-uploads"
 	key := "cpicoicoptest.csv"
@@ -65,7 +66,7 @@ func main() {
 
 	log.Debug("created multi part upload", nil)
 
-	chunks := split(b, 5*1024*1024)
+	chunks := split(b, size)
 
 	var completedParts []*s3.CompletedPart
 

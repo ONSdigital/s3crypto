@@ -35,7 +35,8 @@ type Config struct {
 	PublicKey  *rsa.PublicKey
 	PrivateKey *rsa.PrivateKey
 
-	HasUserDefinedPSK bool
+	HasUserDefinedPSK  bool
+	MultipartChunkSize int
 }
 
 // CryptoClient provides a wrapper to the aws-sdk-go S3
@@ -46,6 +47,7 @@ type CryptoClient struct {
 	privKey           *rsa.PrivateKey
 	publicKey         *rsa.PublicKey
 	hasUserDefinedPSK bool
+	chunkSize         int
 }
 
 // Uploader provides a wrapper to the aws-sdk-go s3manager uploader
@@ -59,7 +61,7 @@ type Uploader struct {
 // New supports the creation of an Encryption supported client
 // with a given aws session and rsa Private Key.
 func New(sess *session.Session, cfg *Config) *CryptoClient {
-	cc := &CryptoClient{s3.New(sess), cfg.PrivateKey, cfg.PublicKey, cfg.HasUserDefinedPSK}
+	cc := &CryptoClient{s3.New(sess), cfg.PrivateKey, cfg.PublicKey, cfg.HasUserDefinedPSK, cfg.MultipartChunkSize}
 
 	if cc.privKey != nil {
 		cc.publicKey = &cc.privKey.PublicKey
@@ -70,7 +72,7 @@ func New(sess *session.Session, cfg *Config) *CryptoClient {
 
 // NewUploader creates a new instance of the s3crypto Uploader
 func NewUploader(sess *session.Session, cfg *Config) *Uploader {
-	cc := &CryptoClient{s3.New(sess), cfg.PrivateKey, cfg.PublicKey, cfg.HasUserDefinedPSK}
+	cc := &CryptoClient{s3.New(sess), cfg.PrivateKey, cfg.PublicKey, cfg.HasUserDefinedPSK, cfg.MultipartChunkSize}
 
 	if cc.privKey != nil {
 		cc.publicKey = &cc.privKey.PublicKey
@@ -283,7 +285,12 @@ func (c *CryptoClient) GetObjectRequest(input *s3.GetObjectInput) (req *request.
 		return
 	}
 
-	content, err := decryptObjectContent(psk, out.Body)
+	var content []byte
+	if c.chunkSize > 0 {
+		content, err = decryptObjectContentChunks(c.chunkSize, psk, out.Body)
+	} else {
+		content, err = decryptObjectContent(psk, out.Body)
+	}
 	if err != nil {
 		req.Error = err
 		return
@@ -304,7 +311,7 @@ func (c *CryptoClient) GetObjectRequestWithPSK(input *s3.GetObjectInput, psk []b
 		return
 	}
 
-	content, err := decryptObjectContent(psk, out.Body)
+	content, err := decryptObjectContentChunks(c.chunkSize, psk, out.Body)
 	if err != nil {
 		req.Error = err
 		return
@@ -496,6 +503,43 @@ func encryptObjectContent(psk []byte, b io.Reader) ([]byte, error) {
 	stream.XORKeyStream(encryptedBytes, unencryptedBytes)
 
 	return encryptedBytes, nil
+}
+
+func decryptObjectContentChunks(size int, psk []byte, r io.ReadCloser) ([]byte, error) {
+
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks := split(b, size)
+	var buf bytes.Buffer
+	for _, chunk := range chunks {
+		unencryptedChunk, err := decryptObjectContent(psk, ioutil.NopCloser(bytes.NewReader(chunk)))
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = buf.Write(unencryptedChunk)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+func split(buf []byte, lim int) [][]byte {
+	var chunk []byte
+	chunks := make([][]byte, 0, len(buf)/lim+1)
+	for len(buf) >= lim {
+		chunk, buf = buf[:lim], buf[lim:]
+		chunks = append(chunks, chunk)
+	}
+	if len(buf) > 0 {
+		chunks = append(chunks, buf[:len(buf)])
+	}
+	return chunks
 }
 
 func decryptObjectContent(psk []byte, b io.ReadCloser) ([]byte, error) {
