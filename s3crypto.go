@@ -516,8 +516,8 @@ func decryptObjectContentChunks(size int, psk []byte, r io.ReadCloser) ([]byte, 
 
 	var buf bytes.Buffer
 	for {
-		n, err := r.Read(p)
-		if err != nil {
+		n, err := io.ReadFull(r, p)
+		if err != nil && err != io.ErrUnexpectedEOF {
 			if err == io.EOF {
 				break
 			}
