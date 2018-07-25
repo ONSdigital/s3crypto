@@ -98,6 +98,59 @@ func (r *cryptoReader) Read(b []byte) (int, error) {
 	return n, nil
 }
 
+type encryptoReader struct {
+	s3Reader io.Reader
+
+	psk       []byte
+	chunkSize int
+	lastChunk bool
+
+	currChunk []byte
+}
+
+func (r *encryptoReader) Read(b []byte) (int, error) {
+	if r.lastChunk && len(r.currChunk) == 0 {
+		return 0, io.EOF
+	}
+
+	if r.chunkSize == 0 {
+		r.chunkSize = maxChunkSize
+	}
+
+	if len(r.currChunk) == 0 {
+		p := make([]byte, r.chunkSize)
+
+		n, err := io.ReadFull(r.s3Reader, p)
+		if err != nil {
+			if err == io.ErrUnexpectedEOF {
+				r.lastChunk = true
+			} else {
+				return n, err
+			}
+		}
+
+		unencryptedChunk, err := encryptObjectContent(r.psk, bytes.NewReader(p[:n]))
+		if err != nil {
+			return 0, err
+		}
+
+		r.currChunk = unencryptedChunk
+	}
+
+	var n int
+	if len(r.currChunk) >= len(b) {
+		copy(b, r.currChunk[:len(b)])
+		n = len(b)
+		r.currChunk = r.currChunk[len(b):]
+	} else {
+		copy(b, r.currChunk)
+		n = len(r.currChunk)
+		r.currChunk = nil
+	}
+
+	return n, nil
+}
+
 func (r *cryptoReader) Close() error {
 	return r.s3Reader.Close()
 }
@@ -528,31 +581,10 @@ func (u *Uploader) Upload(input *s3manager.UploadInput) (output *s3manager.Uploa
 
 // UploadWithPSK allows you to encrypt the file with a given psk
 func (u *Uploader) UploadWithPSK(input *s3manager.UploadInput, psk []byte) (output *s3manager.UploadOutput, err error) {
-
-	p := make([]byte, maxChunkSize)
-	buf := &bytes.Buffer{}
-
-	for {
-		n, err := io.ReadFull(input.Body, p)
-		if err != nil && err != io.ErrUnexpectedEOF {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-
-		encryptedContent, err := encryptObjectContent(psk, bytes.NewReader(p[:n]))
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = buf.Write(encryptedContent)
-		if err != nil {
-			return nil, err
-		}
+	input.Body = &encryptoReader{
+		psk:      psk,
+		s3Reader: input.Body,
 	}
-
-	input.Body = buf
 
 	return u.s3uploader.Upload(input)
 }
