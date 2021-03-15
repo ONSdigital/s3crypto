@@ -5,3 +5,7 @@ audit:
 build:
 	go build ./...
 .PHONY: build
+
+test:
+	@echo "No tests available"
+.PHONY: build
