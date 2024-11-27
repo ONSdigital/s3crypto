@@ -65,7 +65,7 @@ func main() {
 		return
 	}
 
-	log.Event(context.TODO(), "created multi part upload", log.INFO, nil)
+	log.Info(context.TODO(), "created multi part upload")
 
 	chunks := split(b, size)
 
