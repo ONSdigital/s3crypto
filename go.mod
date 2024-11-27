@@ -2,8 +2,6 @@ module github.com/ONSdigital/s3crypto
 
 go 1.23.3
 
-require github.com/aws/aws-sdk-go v1.55.5
-
 require (
 	github.com/ONSdigital/dp-api-clients-go/v2 v2.254.1 // indirect
 	github.com/ONSdigital/dp-net/v2 v2.11.1 // indirect
@@ -17,6 +15,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
 	go.opentelemetry.io/otel/trace v1.21.0 // indirect
 	golang.org/x/sys v0.14.0 // indirect
+    github.com/aws/aws-sdk-go v1.44.76
 )
 
 require (

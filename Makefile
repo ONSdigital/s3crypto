@@ -1,7 +1,7 @@
 SHELL=bash
 
 test:
-	go test -count=1 -race -cover ./...
+	go test -count=1 -mod=mod -race -cover ./...
 
 .PHONY: test
 
@@ -10,7 +10,7 @@ audit:
 .PHONY: audit
 
 build:
-	go build ./...
+	go build -mod=mod ./...
 .PHONY: build
 
 .PHONY: lint
