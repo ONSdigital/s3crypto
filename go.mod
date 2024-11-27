@@ -1,4 +1,4 @@
-module s3crypto
+module github.com/ONSdigital/s3crypto
 
 go 1.23.3
 
@@ -21,6 +21,5 @@ require (
 
 require (
 	github.com/ONSdigital/log.go/v2 v2.4.3
-	github.com/ONSdigital/s3crypto v0.0.0-20180725145621-f8943119a487
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )

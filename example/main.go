@@ -2,12 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
 	"os"
 
-	"github.com/ONSdigital/go-ns/log"
+	"github.com/ONSdigital/log.go/v2/log"
 	"github.com/ONSdigital/s3crypto"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -46,7 +47,7 @@ func main() {
 
 	b, err := ioutil.ReadFile("testdata/" + key)
 	if err != nil {
-		log.Error(err, nil)
+		log.Error(context.TODO(), "", err)
 		return
 	}
 
@@ -60,11 +61,11 @@ func main() {
 
 	result, err := svc.CreateMultipartUpload(input)
 	if err != nil {
-		log.ErrorC("error creating mpu", err, nil)
+		log.Event(context.TODO(), "error creating mpu", log.ERROR)
 		return
 	}
 
-	log.Debug("created multi part upload", nil)
+	log.Event(context.TODO(), "created multi part upload", log.INFO, nil)
 
 	chunks := split(b, size)
 
@@ -84,11 +85,11 @@ func main() {
 
 		res, err := svc.UploadPart(partInput)
 		if err != nil {
-			log.Error(err, nil)
+			log.Event(context.TODO(), err.Error(), log.ERROR, nil)
 			return
 		}
 
-		log.Info("part completed", log.Data{"part": partN})
+		log.Event(context.TODO(), "part completed", log.INFO, log.Data{"part": partN})
 
 		completedParts = append(completedParts, &s3.CompletedPart{
 			PartNumber: &partN,
@@ -108,13 +109,13 @@ func main() {
 
 	cr, err := svc.CompleteMultipartUpload(completeInput)
 	if err != nil {
-		log.Error(err, nil)
+		log.Event(context.TODO(), err.Error(), log.ERROR, nil)
 		return
 	}
 
-	log.Info("upload completed", log.Data{"result": cr})
+	log.Event(context.TODO(), "upload completed", log.INFO, log.Data{"result": cr})
 
-	log.Info("now getting file...", nil)
+	log.Event(context.TODO(), "now getting file...", log.INFO, nil)
 
 	getInput := &s3.GetObjectInput{
 		Bucket: &bucket,
@@ -123,25 +124,25 @@ func main() {
 
 	out, err := svc.GetObject(getInput)
 	if err != nil {
-		log.Error(err, nil)
+		log.Event(context.TODO(), err.Error(), log.ERROR, nil)
 		return
 	}
 
 	newf, err := os.Create("newcpi.csv")
 	if err != nil {
-		log.Error(err, nil)
+		log.Event(context.TODO(), err.Error(), log.ERROR, nil)
 		return
 	}
 	defer newf.Close()
 
 	newB, err := ioutil.ReadAll(out.Body)
 	if err != nil {
-		log.Error(err, nil)
+		log.Event(context.TODO(), err.Error(), log.ERROR, nil)
 		return
 	}
 
 	if _, err := newf.Write(newB); err != nil {
-		log.Error(err, nil)
+		log.Event(context.TODO(), err.Error(), log.ERROR, nil)
 		return
 	}
 
